@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+
+    environment {
+        SONAR_HOME = tool 'Sonar'  // Configure the Sonar tool in Jenkins
+    }
+
+    stages {
+        stage('Clone Code from GitHub') {
+            steps {
+                // Clone the repository
+                git url: 'https://github.com/atharva5683/Wanderlust-Mega-Project.git', branch: 'main'
+            }
+        }
+
+        stage('SonarQube Quality Analysis') {
+            steps {
+                withSonarQubeEnv('Sonar') {
+                    sh '''
+                    $SONAR_HOME/bin/sonar-scanner \
+                    -Dsonar.projectKey=wanderlust \
+                    -Dsonar.projectName=wanderlust \
+                    -X
+                    '''
+                }
+            }
+        }
+
+        stage('QWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./', odcInstallation: 'dc'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+
+        stage('Trivy File System Scan') {
+            steps {
+                sh '''
+                trivy fs --format html --output trivy-fs-report.html .
+                '''
+            }
+        }
+
+        stage('Deploy using Docker Compose') {
+            steps {
+                sh '''
+                docker-compose down
+                docker-compose up -d
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed.'
+        }
+        success {
+            echo 'Pipeline executed successfully.'
+        }
+        failure {
+            echo 'Pipeline execution failed.'
+        }
+    }
+}
